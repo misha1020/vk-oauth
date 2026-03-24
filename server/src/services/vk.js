@@ -1,12 +1,19 @@
-async function exchangeCode({ code, redirectUri, clientId, clientSecret }) {
+async function exchangeCode({ code, redirectUri, clientId, clientSecret, codeVerifier, deviceId }) {
   const params = new URLSearchParams({
+    grant_type: 'authorization_code',
     client_id: clientId,
     client_secret: clientSecret,
     redirect_uri: redirectUri,
     code,
+    code_verifier: codeVerifier,
+    device_id: deviceId,
   });
 
-  const res = await fetch(`https://oauth.vk.com/access_token?${params.toString()}`);
+  const res = await fetch('https://id.vk.com/oauth2/auth', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
   const data = await res.json();
 
   if (data.error) {
@@ -16,6 +23,7 @@ async function exchangeCode({ code, redirectUri, clientId, clientSecret }) {
   return {
     accessToken: data.access_token,
     userId: data.user_id,
+    idToken: data.id_token || null,
   };
 }
 

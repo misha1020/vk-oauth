@@ -8,22 +8,46 @@ function createAuthRoutes({ jwtSecret, vkAppId, vkAppSecret, usersFile }) {
   const router = express.Router();
   const authMiddleware = createAuthMiddleware(jwtSecret);
 
-  router.post('/vk', async (req, res) => {
-    const { code, redirectUri } = req.body;
+  router.get('/vk/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
 
-    if (!code || !redirectUri) {
-      return res.status(400).json({
-        error: 'missing_fields',
-        message: 'code and redirectUri are required',
-      });
+    if (error) {
+      const msg = encodeURIComponent(error_description || error);
+      return res.redirect(`vkoauth://auth/error?message=${msg}`);
     }
+
+    if (!code) {
+      return res.redirect('vkoauth://auth/error?message=missing_code');
+    }
+
+    if (!state) {
+      return res.redirect('vkoauth://auth/error?message=missing_state');
+    }
+
+    let codeVerifier, deviceId;
+    try {
+      const base64 = state.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(Buffer.from(base64, 'base64').toString('utf-8'));
+      codeVerifier = decoded.code_verifier;
+      deviceId = decoded.device_id;
+    } catch {
+      return res.redirect('vkoauth://auth/error?message=invalid_state');
+    }
+
+    if (!codeVerifier || !deviceId) {
+      return res.redirect('vkoauth://auth/error?message=invalid_state');
+    }
+
+    const callbackUrl = `${process.env.SERVER_URL}/auth/vk/callback`;
 
     try {
       const { accessToken } = await exchangeCode({
         code,
-        redirectUri,
+        redirectUri: callbackUrl,
         clientId: vkAppId,
         clientSecret: vkAppSecret,
+        codeVerifier,
+        deviceId,
       });
 
       const profile = await fetchUserProfile(accessToken);
@@ -35,18 +59,10 @@ function createAuthRoutes({ jwtSecret, vkAppId, vkAppSecret, usersFile }) {
         { expiresIn: '7d' }
       );
 
-      return res.json({ token, user });
+      return res.redirect(`vkoauth://auth/success?token=${encodeURIComponent(token)}`);
     } catch (err) {
-      if (err.message && (err.message.includes('VK') || err.message.includes('expired') || err.message.includes('invalid'))) {
-        return res.status(401).json({
-          error: 'vk_exchange_failed',
-          message: err.message,
-        });
-      }
-      return res.status(500).json({
-        error: 'internal_error',
-        message: err.message || 'Internal server error',
-      });
+      const msg = encodeURIComponent(err.message || 'auth_failed');
+      return res.redirect(`vkoauth://auth/error?message=${msg}`);
     }
   });
 

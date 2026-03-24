@@ -21,11 +21,11 @@ describe('vk service', () => {
 
       const result = await exchangeCode({
         code: 'auth-code',
-        codeVerifier: 'verifier',
-        deviceId: 'device-123',
-        redirectUri: 'vkoauth://auth/vk',
+        redirectUri: 'https://mz.ludentes.ru/auth/vk/callback',
         clientId: 'app-id',
         clientSecret: 'app-secret',
+        codeVerifier: 'verifier',
+        deviceId: 'device-123',
       });
 
       expect(result).toEqual({
@@ -34,7 +34,6 @@ describe('vk service', () => {
         idToken: 'some-id-token',
       });
 
-      // Verify fetch was called with correct URL and form body
       expect(fetch).toHaveBeenCalledWith(
         'https://id.vk.com/oauth2/auth',
         expect.objectContaining({ method: 'POST' })
@@ -53,31 +52,33 @@ describe('vk service', () => {
       await expect(
         exchangeCode({
           code: 'bad-code',
-          codeVerifier: 'verifier',
-          deviceId: 'device-123',
-          redirectUri: 'vkoauth://auth/vk',
+          redirectUri: 'https://mz.ludentes.ru/auth/vk/callback',
           clientId: 'app-id',
           clientSecret: 'app-secret',
+          codeVerifier: 'verifier',
+          deviceId: 'device-123',
         })
       ).rejects.toThrow('Code expired');
     });
   });
 
   describe('fetchUserProfile', () => {
-    test('returns user profile from VK ID user_info endpoint', async () => {
+    test('returns user profile from VK API', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          user: {
-            user_id: '12345',
-            first_name: 'Ivan',
-            last_name: 'Petrov',
-          },
+          response: [
+            { id: 12345, first_name: 'Ivan', last_name: 'Petrov' },
+          ],
         }),
       });
 
-      const profile = await fetchUserProfile('vk-access-token', 'test-client-id');
+      const profile = await fetchUserProfile('vk-access-token');
       expect(profile).toEqual({ vkId: 12345, firstName: 'Ivan', lastName: 'Petrov' });
+
+      expect(fetch).toHaveBeenCalledWith(
+        expect.stringContaining('https://api.vk.com/method/users.get')
+      );
     });
   });
 });

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { loginWithVK, getMe } from '../services/api';
+import { getMe } from '../services/api';
 import { TOKEN_KEY } from '../config';
 
 interface User {
@@ -15,10 +15,7 @@ interface AuthState {
   isLoggedIn: boolean;
   user: User | null;
   error: string | null;
-  login: (params: {
-    code: string;
-    redirectUri: string;
-  }) => Promise<void>;
+  login: (params: { token: string }) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -49,7 +46,6 @@ export function useAuthProvider() {
         setState({ isLoading: false, isLoggedIn: false, user: null, error: null });
         return;
       }
-
       const { user } = await getMe(token);
       setState({ isLoading: false, isLoggedIn: true, user, error: null });
     } catch {
@@ -58,16 +54,14 @@ export function useAuthProvider() {
     }
   }
 
-  const login = useCallback(async (params: {
-    code: string;
-    redirectUri: string;
-  }) => {
+  const login = useCallback(async ({ token }: { token: string }) => {
     setState((prev) => ({ ...prev, isLoading: true, error: null }));
     try {
-      const { token, user } = await loginWithVK(params);
       await SecureStore.setItemAsync(TOKEN_KEY, token);
+      const { user } = await getMe(token);
       setState({ isLoading: false, isLoggedIn: true, user, error: null });
     } catch (err: any) {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
       setState((prev) => ({
         ...prev,
         isLoading: false,

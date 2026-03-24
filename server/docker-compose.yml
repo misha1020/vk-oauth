@@ -2,7 +2,7 @@ services:
   vk-oauth-server:
     build: .
     ports:
-      - "3000:3000"
+      - "5173:5173"
     env_file:
       - .env
     volumes:

@@ -1,31 +1,25 @@
-import { Text, Pressable, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useVKAuth } from '../src/hooks/useVKAuth';
 import { useAuth } from '../src/hooks/useAuth';
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
-  const { login, isLoading, error } = useAuth();
+  const { login, isLoading: authLoading, error: authError } = useAuth();
+  const { promptAsync, isLoading: vkLoading, isReady, error: vkError } = useVKAuth(
+    async ({ token }) => {
+      await login({ token });
+      router.replace('/home');
+    }
+  );
 
-  const { promptAsync, isReady, request, response } = useVKAuth(async (result) => {
-    await login(result);
-    router.replace('/home');
-  });
+  const isLoading = authLoading || vkLoading;
+  const error = vkError || authError;
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       <Text style={styles.title}>VK OAuth Demo</Text>
 
-      {error && <Text style={styles.debug}>{error}</Text>}
-
-      {request?.url && (
-        <Text selectable style={styles.debug}>{request.url}</Text>
-      )}
-
-      {response && response.type !== 'success' && (
-        <Text selectable style={styles.debug}>
-          response: {JSON.stringify(response, null, 2)}
-        </Text>
-      )}
+      {error && <Text style={styles.error}>{error}</Text>}
 
       <Pressable
         style={[styles.button, (!isReady || isLoading) && styles.buttonDisabled]}
@@ -38,13 +32,13 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>Sign in with VK</Text>
         )}
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -71,12 +65,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  debug: {
-    fontSize: 10,
-    color: '#333',
+  error: {
+    color: 'red',
     marginBottom: 16,
-    padding: 8,
-    backgroundColor: '#eee',
-    borderRadius: 4,
+    textAlign: 'center',
   },
 });
