@@ -1,6 +1,5 @@
 const { exchangeCode, fetchUserProfile } = require('../../src/services/vk');
 
-// Mock global fetch
 global.fetch = jest.fn();
 
 beforeEach(() => {
@@ -9,7 +8,7 @@ beforeEach(() => {
 
 describe('vk service', () => {
   describe('exchangeCode', () => {
-    test('returns tokens on successful exchange', async () => {
+    test('POSTs to id.vk.ru/oauth2/auth and returns tokens', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -21,11 +20,10 @@ describe('vk service', () => {
 
       const result = await exchangeCode({
         code: 'auth-code',
-        redirectUri: 'https://mz.ludentes.ru/auth/vk/callback',
-        clientId: 'app-id',
-        clientSecret: 'app-secret',
         codeVerifier: 'verifier',
         deviceId: 'device-123',
+        redirectUri: 'vk54501952://vk.ru/blank.html',
+        clientId: '54501952',
       });
 
       expect(result).toEqual({
@@ -33,9 +31,8 @@ describe('vk service', () => {
         userId: 12345,
         idToken: 'some-id-token',
       });
-
       expect(fetch).toHaveBeenCalledWith(
-        'https://id.vk.com/oauth2/auth',
+        'https://id.vk.ru/oauth2/auth',
         expect.objectContaining({ method: 'POST' })
       );
     });
@@ -52,32 +49,33 @@ describe('vk service', () => {
       await expect(
         exchangeCode({
           code: 'bad-code',
-          redirectUri: 'https://mz.ludentes.ru/auth/vk/callback',
-          clientId: 'app-id',
-          clientSecret: 'app-secret',
           codeVerifier: 'verifier',
           deviceId: 'device-123',
+          redirectUri: 'vk54501952://vk.ru/blank.html',
+          clientId: '54501952',
         })
       ).rejects.toThrow('Code expired');
     });
   });
 
   describe('fetchUserProfile', () => {
-    test('returns user profile from VK API', async () => {
+    test('POSTs to id.vk.ru/oauth2/user_info and returns parsed profile', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          response: [
-            { id: 12345, first_name: 'Ivan', last_name: 'Petrov' },
-          ],
+          user: {
+            user_id: '12345',
+            first_name: 'Ivan',
+            last_name: 'Petrov',
+          },
         }),
       });
 
-      const profile = await fetchUserProfile('vk-access-token');
+      const profile = await fetchUserProfile('vk-access-token', '54501952', 'device-123');
       expect(profile).toEqual({ vkId: 12345, firstName: 'Ivan', lastName: 'Petrov' });
-
       expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('https://api.vk.com/method/users.get')
+        expect.stringContaining('https://id.vk.ru/oauth2/user_info'),
+        expect.objectContaining({ method: 'POST' })
       );
     });
   });

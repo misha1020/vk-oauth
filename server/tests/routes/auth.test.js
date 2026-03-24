@@ -15,28 +15,16 @@ jest.mock('../../src/services/vk', () => ({
 
 const { exchangeCode, fetchUserProfile } = require('../../src/services/vk');
 
-beforeAll(() => {
-  process.env.SERVER_URL = 'https://mz.ludentes.ru';
-});
-
 function createApp() {
   const app = express();
   app.use(express.json());
   app.use('/auth', createAuthRoutes({
     jwtSecret: JWT_SECRET,
-    vkAppId: 'test-app-id',
+    vkAppId: '54501952',
     vkAppSecret: 'test-app-secret',
     usersFile: TEST_FILE,
   }));
   return app;
-}
-
-function makeState(codeVerifier = 'test-verifier', deviceId = 'test-device') {
-  return Buffer.from(JSON.stringify({ code_verifier: codeVerifier, device_id: deviceId }))
-    .toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
 }
 
 beforeEach(() => {
@@ -49,58 +37,43 @@ afterAll(() => {
   if (fs.existsSync(TEST_FILE)) fs.unlinkSync(TEST_FILE);
 });
 
-describe('GET /auth/vk/callback', () => {
-  test('redirects to success deep link with JWT on valid code', async () => {
+describe('POST /auth/vk/exchange', () => {
+  test('returns JWT token on valid code exchange', async () => {
     exchangeCode.mockResolvedValue({ accessToken: 'vk-token', userId: 12345, idToken: null });
     fetchUserProfile.mockResolvedValue({ vkId: 12345, firstName: 'Ivan', lastName: 'Petrov' });
 
     const app = createApp();
-    const res = await request(app).get(`/auth/vk/callback?code=valid-code&state=${makeState()}`);
+    const res = await request(app).post('/auth/vk/exchange').send({
+      code: 'valid-code',
+      code_verifier: 'test-verifier',
+      device_id: 'test-device',
+    });
 
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toMatch(/^vkoauth:\/\/auth\/success\?token=/);
-
-    const tokenMatch = res.headers.location.match(/token=([^&]+)/);
-    const token = decodeURIComponent(tokenMatch[1]);
-    const payload = jwt.verify(token, JWT_SECRET);
+    expect(res.status).toBe(200);
+    expect(res.body.token).toBeDefined();
+    const payload = jwt.verify(res.body.token, JWT_SECRET);
     expect(payload.vkId).toBe(12345);
   });
 
-  test('redirects to error deep link when VK returns error param', async () => {
+  test('returns 400 when fields are missing', async () => {
     const app = createApp();
-    const res = await request(app)
-      .get('/auth/vk/callback?error=access_denied&error_description=User+denied+access');
-
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toMatch(/^vkoauth:\/\/auth\/error/);
-    expect(decodeURIComponent(res.headers.location)).toContain('User denied access');
+    const res = await request(app).post('/auth/vk/exchange').send({ code: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('missing_fields');
   });
 
-  test('redirects to error deep link when code is missing', async () => {
-    const app = createApp();
-    const res = await request(app).get('/auth/vk/callback');
-
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('vkoauth://auth/error?message=missing_code');
-  });
-
-  test('redirects to error deep link when state is missing', async () => {
-    const app = createApp();
-    const res = await request(app).get('/auth/vk/callback?code=valid-code');
-
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('vkoauth://auth/error?message=missing_state');
-  });
-
-  test('redirects to error deep link when exchange fails', async () => {
+  test('returns 401 when VK exchange fails', async () => {
     exchangeCode.mockRejectedValue(new Error('Code expired'));
 
     const app = createApp();
-    const res = await request(app).get(`/auth/vk/callback?code=bad-code&state=${makeState()}`);
+    const res = await request(app).post('/auth/vk/exchange').send({
+      code: 'bad-code',
+      code_verifier: 'verifier',
+      device_id: 'device',
+    });
 
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toMatch(/^vkoauth:\/\/auth\/error/);
-    expect(decodeURIComponent(res.headers.location)).toContain('Code expired');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('vk_exchange_failed');
   });
 });
 
@@ -110,9 +83,12 @@ describe('GET /auth/me', () => {
     fetchUserProfile.mockResolvedValue({ vkId: 12345, firstName: 'Ivan', lastName: 'Petrov' });
 
     const app = createApp();
-    const callbackRes = await request(app).get(`/auth/vk/callback?code=valid-code&state=${makeState()}`);
-    const tokenMatch = callbackRes.headers.location.match(/token=([^&]+)/);
-    const token = decodeURIComponent(tokenMatch[1]);
+    const exchangeRes = await request(app).post('/auth/vk/exchange').send({
+      code: 'valid-code',
+      code_verifier: 'verifier',
+      device_id: 'device',
+    });
+    const { token } = exchangeRes.body;
 
     const res = await request(app)
       .get('/auth/me')

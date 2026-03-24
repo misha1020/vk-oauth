@@ -1,31 +1,52 @@
-import { useCallback, useRef, useState } from 'react';
-import * as WebBrowser from 'expo-web-browser';
-import { VK_CLIENT_ID, API_URL } from '../config';
+import { useCallback, useRef, useState } from "react";
+import * as WebBrowser from "expo-web-browser";
+import * as Crypto from "expo-crypto";
+import { VK_CLIENT_ID } from "../config";
+import { exchangeVKCode } from "../services/api";
+
+const REDIRECT_BASE = `vk${VK_CLIENT_ID}://vk.ru/blank.html`;
+
+// Module-level PKCE storage — survives component remounts when
+// Expo Router navigates to +not-found on VK redirect deep link
+let _storedPKCE: { codeVerifier: string; state: string } | null = null;
+export function getStoredPKCE() {
+  return _storedPKCE;
+}
+export function clearStoredPKCE() {
+  _storedPKCE = null;
+}
 
 function base64urlEncode(array: Uint8Array): string {
   return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=/g, "");
 }
 
 async function generateCodeVerifier(): Promise<string> {
   const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
+  Crypto.getRandomValues(array);
   return base64urlEncode(array);
 }
 
 async function generateCodeChallenge(verifier: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(verifier);
-  const hash = await crypto.subtle.digest('SHA-256', data);
-  return base64urlEncode(new Uint8Array(hash));
+  const digest = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    verifier,
+    { encoding: Crypto.CryptoEncoding.BASE64 }
+  );
+  return digest.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-function generateDeviceId(): string {
-  const array = new Uint8Array(16);
-  crypto.getRandomValues(array);
-  return base64urlEncode(array);
+function parseCallbackUrl(url: string) {
+  const code = (url.match(/[?&]code=([^&]+)/) || [])[1];
+  const state = (url.match(/[?&]state=([^&]+)/) || [])[1];
+  const deviceId = (url.match(/[?&]device_id=([^&]+)/) || [])[1];
+  return {
+    code: code ? decodeURIComponent(code) : null,
+    state: state ? decodeURIComponent(state) : null,
+    deviceId: deviceId ? decodeURIComponent(deviceId) : null
+  };
 }
 
 export interface VKAuthResult {
@@ -44,49 +65,67 @@ export function useVKAuth(onSuccess: (result: VKAuthResult) => void) {
     try {
       const codeVerifier = await generateCodeVerifier();
       const codeChallenge = await generateCodeChallenge(codeVerifier);
-      const deviceId = generateDeviceId();
-      const redirectUri = `${API_URL}/auth/vk/callback`;
+      const stateArray = new Uint8Array(16);
+      Crypto.getRandomValues(stateArray);
+      const state = base64urlEncode(stateArray);
 
-      // Encode code_verifier + device_id in state so server can retrieve them from callback
-      const state = btoa(JSON.stringify({ code_verifier: codeVerifier, device_id: deviceId }))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=/g, '');
+      _storedPKCE = { codeVerifier, state };
+
+      const oauth2Params = btoa('scope="email"')
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_")
+        .replace(/=/g, "");
+      const redirectUri = `${REDIRECT_BASE}?oauth2_params=${oauth2Params}`;
 
       const params = new URLSearchParams({
         client_id: VK_CLIENT_ID,
         redirect_uri: redirectUri,
-        response_type: 'code',
-        state,
+        response_type: "code",
         code_challenge: codeChallenge,
-        code_challenge_method: 's256',
-        scope: 'email',
-        display: 'mobile',
+        code_challenge_method: "S256",
+        state,
+        lang_id: "3"
       });
 
+      const authUrl = `https://id.vk.ru/authorize?${params.toString()}`;
       const result = await WebBrowser.openAuthSessionAsync(
-        `https://id.vk.com/authorize?${params.toString()}`,
-        'vkoauth://'
+        authUrl,
+        `vk${VK_CLIENT_ID}://`
       );
 
-      if (result.type === 'success') {
-        if (result.url.startsWith('vkoauth://auth/success')) {
-          const tokenMatch = result.url.match(/token=([^&]+)/);
-          const token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : null;
-          if (token) {
-            onSuccessRef.current({ token });
-          } else {
-            setError('Token missing from redirect');
-          }
-        } else if (result.url.startsWith('vkoauth://auth/error')) {
-          const msgMatch = result.url.match(/message=([^&]+)/);
-          setError(msgMatch ? decodeURIComponent(msgMatch[1]) : 'Authentication failed');
+      if (result.type === "success" && result.url) {
+        // openAuthSessionAsync caught the redirect (works on some devices)
+        _storedPKCE = null;
+        const {
+          code,
+          state: returnedState,
+          deviceId
+        } = parseCallbackUrl(result.url);
+
+        if (!code || !deviceId) {
+          setError("Missing code or device_id in VK response");
+          return;
         }
+        if (returnedState !== state) {
+          setError("State mismatch — request may have been tampered with");
+          return;
+        }
+
+        const { token } = await exchangeVKCode({
+          code,
+          codeVerifier,
+          deviceId
+        });
+        onSuccessRef.current({ token });
+      } else {
+        // Browser dismissed without capturing redirect.
+        // If VK redirected, Expo Router sends it to +not-found.tsx
+        // which handles the callback using _storedPKCE.
+        setIsLoading(false);
       }
-      // type === 'cancel' or 'dismiss' → user closed browser, no-op
     } catch (err: any) {
-      setError(err.message || 'Authentication failed');
-    } finally {
+      _storedPKCE = null;
+      setError(err.message || "Authentication failed");
       setIsLoading(false);
     }
   }, []);

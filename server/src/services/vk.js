@@ -1,15 +1,14 @@
-async function exchangeCode({ code, redirectUri, clientId, clientSecret, codeVerifier, deviceId }) {
+async function exchangeCode({ code, codeVerifier, deviceId, redirectUri, clientId }) {
   const params = new URLSearchParams({
     grant_type: 'authorization_code',
     client_id: clientId,
-    client_secret: clientSecret,
-    redirect_uri: redirectUri,
     code,
     code_verifier: codeVerifier,
     device_id: deviceId,
+    redirect_uri: redirectUri,
   });
 
-  const res = await fetch('https://id.vk.com/oauth2/auth', {
+  const res = await fetch('https://id.vk.ru/oauth2/auth', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params.toString(),
@@ -27,23 +26,29 @@ async function exchangeCode({ code, redirectUri, clientId, clientSecret, codeVer
   };
 }
 
-async function fetchUserProfile(accessToken) {
+async function fetchUserProfile(accessToken, clientId, deviceId) {
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: 'first_name,last_name',
-    v: '5.131',
+    device_id: deviceId,
   });
 
-  const res = await fetch(`https://api.vk.com/method/users.get?${params.toString()}`);
+  const res = await fetch(
+    `https://id.vk.ru/oauth2/user_info?client_id=${encodeURIComponent(clientId)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    }
+  );
   const data = await res.json();
 
   if (data.error) {
-    throw new Error(data.error.error_msg || 'VK API error');
+    throw new Error(data.error || 'VK API error');
   }
 
-  const user = data.response[0];
+  const user = data.user;
   return {
-    vkId: user.id,
+    vkId: parseInt(user.user_id, 10),
     firstName: user.first_name,
     lastName: user.last_name,
   };
