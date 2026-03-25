@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "VK OAuth SDK Demo",
+    "slug": "vk-oauth-sdk-demo",
+    "scheme": ["vkoauthsdk", "vk54501952"],
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["android"],
+    "android": {
+      "package": "com.vkoauth.appsdk",
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE"
+      }
+    },
+    "plugins": [
+      "expo-secure-store",
+      "expo-router",
+      [
+        "./plugins/withVKSDK",
+        {
+          "clientId": "54501952",
+          "clientSecret": "neJqXQfaR9PBh68sYr9k"
+        }
+      ]
+    ]
+  }
+}
