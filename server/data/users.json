@@ -16,5 +16,15 @@
     "email": "mishaz020@yandex.ru",
     "avatarId": "60687/JmUscrWwWEqjRkVZ52Eu45kXxM-1",
     "createdAt": "2026-05-08T06:02:45.102Z"
+  },
+  {
+    "id": "3e56baa4-4768-41e8-9f04-a256a3082fa8",
+    "provider": "google",
+    "providerId": "110784405208766510553",
+    "firstName": "Maugry4",
+    "lastName": "Tes4",
+    "email": "maugrytest5@gmail.com",
+    "avatarId": "https://lh3.googleusercontent.com/a/ACg8ocJMfCbSPi2ypnpNUb_kQhktqgeFSzzJEcpOVkqlyEKWD2x1PA=s96-c",
+    "createdAt": "2026-05-18T07:43:44.474Z"
   }
 ]

@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { useVKSDKAuth } from "../src/hooks/useVKSDKAuth";
 import { useYandexAuth } from "../src/hooks/useYandexAuth";
+import { useGoogleAuth } from "../src/hooks/useGoogleAuth";
 import { useAuth } from "../src/hooks/useAuth";
 import { router } from "expo-router";
 import buildVersion from "../build-version.json";
@@ -30,9 +31,17 @@ export default function LoginScreen() {
     await login({ token });
     router.replace("/home");
   });
+  const {
+    authorize: googleAuthorize,
+    isLoading: googleLoading,
+    error: googleError
+  } = useGoogleAuth(async ({ token }) => {
+    await login({ token });
+    router.replace("/home");
+  });
 
-  const isLoading = authLoading || vkLoading || yandexLoading;
-  const error = vkError || yandexError || authError;
+  const isLoading = authLoading || vkLoading || yandexLoading || googleLoading;
+  const error = vkError || yandexError || googleError || authError;
 
   return (
     <View style={styles.container}>
@@ -68,6 +77,18 @@ export default function LoginScreen() {
           <Text style={styles.buttonText}>Sign in with Yandex</Text>
         )}
       </Pressable>
+
+      <Pressable
+        style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+        onPress={() => googleAuthorize()}
+        disabled={isLoading}
+      >
+        {googleLoading ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Sign in with Google</Text>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -95,6 +116,15 @@ const styles = StyleSheet.create({
   },
   yandexButton: {
     backgroundColor: "#FC3F1D",
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 8,
+    minWidth: 200,
+    alignItems: "center",
+    marginTop: 12
+  },
+  googleButton: {
+    backgroundColor: "#4285F4",
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 8,

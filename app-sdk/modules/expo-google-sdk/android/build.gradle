@@ -1,0 +1,40 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+group = 'expo.modules.googlesdk'
+
+def safeExtGet(prop, fallback) {
+    rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+android {
+    namespace "expo.modules.googlesdk"
+    compileSdkVersion safeExtGet("compileSdkVersion", 35)
+
+    defaultConfig {
+        minSdkVersion safeExtGet("minSdkVersion", 24)
+        targetSdkVersion safeExtGet("targetSdkVersion", 35)
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    implementation "androidx.appcompat:appcompat:1.6.1"
+    implementation "androidx.activity:activity-ktx:1.8.2"
+    // Credential Manager + Sign in with Google (verified in design doc against Google's
+    // 2026 implementation guide — see docs/google/2026-05-15-design.md Section 1).
+    implementation "androidx.credentials:credentials:1.7.0-alpha02"
+    implementation "androidx.credentials:credentials-play-services-auth:1.7.0-alpha02"
+    implementation "com.google.android.libraries.identity.googleid:googleid:1.1.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
+}

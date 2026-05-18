@@ -70,6 +70,30 @@ export async function exchangeYandexJwt(params: {
   return res.json();
 }
 
+export async function exchangeGoogleJwt(params: {
+  idToken: string;
+  nonce: string;
+}): Promise<{ token: string }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  const res = await fetch(`${API_URL}/auth/google/exchange-jwt`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken: params.idToken, nonce: params.nonce }),
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(
+      (body as any).message || (body as any).error || "Google ID token exchange failed"
+    );
+  }
+
+  return res.json();
+}
+
 export async function getMe(token: string): Promise<MeResponse> {
   const res = await fetch(`${API_URL}/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },

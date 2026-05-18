@@ -12,6 +12,10 @@
         "backgroundColor": "#E6F4FE"
       }
     },
+    "ios": {
+      "bundleIdentifier": "com.socialoauth.appsdk",
+      "supportsTablet": false
+    },
     "plugins": [
       "expo-secure-store",
       "expo-router",
@@ -26,6 +30,13 @@
         "./plugins/withYandexSDK",
         {
           "clientId": "53af4a5707a442c59b0d251f83401de1"
+        }
+      ],
+      [
+        "./plugins/withGoogleSDK",
+        {
+          "iosClientId": "470263963924-ft3erpd52954hprobm5gagt3c8hsifg3.apps.googleusercontent.com",
+          "webClientId": "470263963924-kq5eu0ahlkrvjccufrese7ultrgnvppd.apps.googleusercontent.com"
         }
       ],
       "./plugins/withCleartextHttp"

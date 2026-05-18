@@ -2,11 +2,12 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const { exchangeCode, fetchUserProfile: fetchVKUserProfile } = require('../services/vk');
 const { verifyYandexJwt } = require('../services/yandex');
+const { verifyGoogleIdToken } = require('../services/google');
 const { findById, createUser } = require('../services/users');
 const { createAuthMiddleware } = require('../middleware/auth');
 
 // vkAppSecret accepted for caller compatibility; not used — PKCE replaces client_secret in VK ID OAuth 2.1
-function createAuthRoutes({ jwtSecret, vkAppId, vkAppSecret, yandexClientSecret, usersFile }) {
+function createAuthRoutes({ jwtSecret, vkAppId, vkAppSecret, yandexClientSecret, googleWebClientId, usersFile }) {
   const router = express.Router();
   const authMiddleware = createAuthMiddleware(jwtSecret);
 
@@ -96,6 +97,62 @@ function createAuthRoutes({ jwtSecret, vkAppId, vkAppSecret, yandexClientSecret,
       console.error('[yandex-jwt] FAILED:', msg);
       if (msg.startsWith('yandex_jwt_invalid')) {
         return res.status(401).json({ error: 'yandex_jwt_invalid', message: msg });
+      }
+      return res.status(500).json({ error: 'internal_error', message: msg });
+    }
+  });
+
+  router.post('/google/exchange-jwt', async (req, res) => {
+    const { idToken, nonce } = req.body;
+
+    if (!idToken || !nonce) {
+      return res.status(400).json({
+        error: 'missing_fields',
+        message: 'idToken and nonce are required',
+      });
+    }
+    if (!googleWebClientId) {
+      return res.status(500).json({
+        error: 'server_misconfigured',
+        message: 'GOOGLE_WEB_CLIENT_ID is not set',
+      });
+    }
+
+    try {
+      const profile = await verifyGoogleIdToken({
+        idToken,
+        audience: googleWebClientId,
+        expectedNonce: nonce,
+      });
+
+      const userProfile = {
+        provider: 'google',
+        providerId: profile.sub,
+        firstName: profile.givenName || '',
+        lastName: profile.familyName || '',
+        ...(profile.email ? { email: profile.email } : {}),
+        ...(profile.picture ? { avatarId: profile.picture } : {}),
+      };
+
+      const user = createUser(userProfile, usersFile);
+      const token = jwt.sign(
+        { userId: user.id, provider: user.provider, providerId: user.providerId },
+        jwtSecret,
+        { expiresIn: '7d' }
+      );
+
+      return res.json({ token });
+    } catch (err) {
+      const msg = err.message || '';
+      console.error('[google-jwt] FAILED:', msg);
+      if (msg.startsWith('google_id_token_invalid')) {
+        return res.status(401).json({ error: 'google_id_token_invalid', message: msg });
+      }
+      if (msg.startsWith('google_nonce_mismatch')) {
+        return res.status(401).json({ error: 'google_nonce_mismatch', message: msg });
+      }
+      if (msg.startsWith('google_email_not_verified')) {
+        return res.status(403).json({ error: 'google_email_not_verified', message: msg });
       }
       return res.status(500).json({ error: 'internal_error', message: msg });
     }
