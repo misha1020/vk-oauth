@@ -8,6 +8,7 @@ import {
 import * as SecureStore from "expo-secure-store";
 import { getMe } from "../services/api";
 import { TOKEN_KEY } from "../config";
+import { logout as yandexLogout } from "../../modules/expo-yandex-sdk";
 
 interface User {
   id: string;
@@ -80,6 +81,10 @@ export function useAuthProvider() {
   }, []);
 
   const logout = useCallback(async () => {
+    // Best-effort: clear YandexLoginSDK's local state so the next iOS authorize() goes
+    // through full consent instead of auto-resuming via the Safari-shared passport cookie.
+    // Never block our own logout on this.
+    await yandexLogout();
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     setState({ isLoading: false, isLoggedIn: false, user: null, error: null });
   }, []);

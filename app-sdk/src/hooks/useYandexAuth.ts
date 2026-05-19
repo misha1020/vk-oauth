@@ -18,19 +18,22 @@ export function useYandexAuth(onSuccess: (result: YandexAuthResult) => void) {
     try {
       const result = await yandexAuthorize();
       if ("cancelled" in result && result.cancelled) {
-        setIsLoading(false);
+        setError("Ошибка авторизации через Яндекс");
         return;
       }
 
-      // The native module already fetched the Yandex-signed JWT via the SDK's getJwt()
-      // (Approach A) — the raw access token never enters JS.
-      console.log("[yandex] JWT:", result.jwt); // copy from logs to verify offline if needed
-
-      // Send the JWT to our backend, which verifies the HS256 signature with client_secret.
+      // The native module already fetched the Yandex-signed JWT via getJwt() on Android
+      // and via the SDK login result on iOS (Approach A). Raw access token never enters JS.
       const { token } = await exchangeYandexJwt({ jwt: result.jwt });
       onSuccessRef.current({ token });
     } catch (err: any) {
-      setError(err.message || "Yandex authentication failed");
+      const raw = err instanceof Error ? err.message : String(err);
+      if (/cancel/i.test(raw)) {
+        setError("Ошибка авторизации через Яндекс");
+      } else {
+        const isRussian = /[а-яА-ЯёЁ]/.test(raw);
+        setError(isRussian ? raw : "Ошибка авторизации через Яндекс");
+      }
     } finally {
       setIsLoading(false);
     }

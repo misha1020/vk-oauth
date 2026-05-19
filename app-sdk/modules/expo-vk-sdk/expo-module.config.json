@@ -1,6 +1,10 @@
 {
-  "platforms": ["android"],
+  "platforms": ["android", "ios"],
   "android": {
     "modules": ["expo.modules.vksdk.ExpoVKSDKModule"]
+  },
+  "ios": {
+    "modules": ["ExpoVKSDKModule"],
+    "appDelegateSubscribers": ["VKAppDelegateSubscriber"]
   }
 }

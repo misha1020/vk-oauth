@@ -15,3 +15,12 @@ export async function authorize(): Promise<YandexAuthResult> {
   }
   return ExpoYandexSDK.authorize();
 }
+
+export async function logout(): Promise<void> {
+  if (!ExpoYandexSDK) return;
+  try {
+    await ExpoYandexSDK.logout();
+  } catch {
+    // Best-effort: signOut must never block on Yandex logout (see iOS module rationale).
+  }
+}

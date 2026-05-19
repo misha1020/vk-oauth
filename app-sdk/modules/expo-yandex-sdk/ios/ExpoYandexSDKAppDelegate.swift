@@ -1,24 +1,34 @@
 import ExpoModulesCore
 import YandexLoginSDK
 
-// Forwards the OAuth callback URL (yx<clientId>://...) and universal-link continuation
-// to YXLoginSDK so the native Yandex app SSO flow can complete.
-//
-// UNVERIFIED: exact YXLoginSDK API surface (handleOpen vs processUserActivity, parameter
-// labels, throws vs Bool return) varies across SDK versions. Verify against the version
-// pinned in the podspec at first iOS build and adjust if compile errors appear.
 public class ExpoYandexSDKAppDelegate: ExpoAppDelegateSubscriber {
+  // Activation must happen on the main thread. ExpoYandexSDKModule.OnCreate runs on a
+  // background thread, where YandexLoginSDK.activate throws a thread assertion that
+  // `try?` silently swallows — leaving the SDK un-initialised when authorize() is called.
+  public func application(
+    _ application: UIApplication,
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+  ) -> Bool {
+    guard let clientId = Bundle.main.object(forInfoDictionaryKey: "YandexClientID") as? String,
+          !clientId.isEmpty else {
+      ExpoYandexSDKModule.activationError = "YandexClientID missing from Info.plist"
+      return true
+    }
+    do {
+      try YandexLoginSDK.shared.activate(with: clientId)
+      ExpoYandexSDKModule.isActivated = true
+    } catch {
+      ExpoYandexSDKModule.activationError = "YandexLoginSDK activate failed: \(error.localizedDescription)"
+    }
+    return true
+  }
+
   public func application(
     _ app: UIApplication,
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey: Any] = [:]
   ) -> Bool {
-    do {
-      try YXLoginSDK.handleOpen(url: url, sourceApplication: options[.sourceApplication] as? String)
-      return true
-    } catch {
-      return false
-    }
+    return YandexLoginSDK.shared.tryHandleOpenURL(url)
   }
 
   public func application(
@@ -26,11 +36,6 @@ public class ExpoYandexSDKAppDelegate: ExpoAppDelegateSubscriber {
     continue userActivity: NSUserActivity,
     restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
   ) -> Bool {
-    do {
-      try YXLoginSDK.processUserActivity(userActivity)
-      return true
-    } catch {
-      return false
-    }
+    return YandexLoginSDK.shared.tryHandleUserActivity(userActivity)
   }
 }

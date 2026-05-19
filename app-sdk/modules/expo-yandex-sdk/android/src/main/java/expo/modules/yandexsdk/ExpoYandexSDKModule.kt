@@ -81,6 +81,13 @@ class ExpoYandexSDKModule : Module() {
     override fun definition() = ModuleDefinition {
         Name("ExpoYandexSDK")
 
+        AsyncFunction("logout") { promise: Promise ->
+            // No-op on Android: com.yandex.authsdk has no client-side logout — token
+            // revocation is server-side only. Chrome Custom Tab cookie isolation already
+            // prevents the iOS-style auto-resume. Kept so JS can call symmetrically.
+            promise.resolve(null)
+        }
+
         AsyncFunction("authorize") { promise: Promise ->
             val activity = appContext.currentActivity as? ComponentActivity
             if (activity == null) {

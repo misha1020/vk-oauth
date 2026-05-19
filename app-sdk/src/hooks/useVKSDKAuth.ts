@@ -56,7 +56,15 @@ export function useVKSDKAuth(onSuccess: (result: VKAuthResult) => void) {
 
       onSuccessRef.current({ token });
     } catch (err: any) {
-      setError(err.message || "Authentication failed");
+      const raw = err instanceof Error ? err.message : String(err);
+      // Native module surfaces user cancellation as ERR_VK_CANCELLED / "cancelled".
+      // Map both that and any SDK cancellation message to a single Russian toast string.
+      if (/cancel/i.test(raw) || /ERR_VK_CANCELLED/.test(raw)) {
+        setError("Ошибка авторизации через ВК");
+      } else {
+        const isRussian = /[а-яА-ЯёЁ]/.test(raw);
+        setError(isRussian ? raw : "Ошибка авторизации через ВК");
+      }
     } finally {
       setIsLoading(false);
     }

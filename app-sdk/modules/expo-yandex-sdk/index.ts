@@ -1,4 +1,4 @@
-export { authorize } from "./src";
+export { authorize, logout } from "./src";
 export type {
   YandexAuthResult,
   YandexAuthSuccess,
